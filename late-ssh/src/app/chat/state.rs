@@ -4684,6 +4684,27 @@ impl ChatState {
             return None;
         }
 
+        if parse_shrug_command(&body) {
+            let room_id = self.composer_room_id;
+            self.clear_composer_after_submit();
+            let Some(room_id) = room_id else {
+                return Some(Banner::error("Send /shrug from inside a room"));
+            };
+            let request_id = Uuid::now_v7();
+            self.service
+                .send_message_with_reply_task(super::svc::SendMessageTask {
+                    user_id: self.user_id,
+                    room_id,
+                    room_slug: self.room_slug(room_id),
+                    body: SHRUG.to_string(),
+                    reply_to_message_id: None,
+                    request_id,
+                    is_admin: self.is_admin,
+                });
+            self.pending_send_notices.push_back(request_id);
+            return None;
+        }
+
         if let Some(parsed) = parse_me_command(&body) {
             let Some(action_body) = parsed else {
                 self.clear_composer_after_submit();
@@ -8170,6 +8191,14 @@ pub(crate) fn parse_cup_command(input: &str) -> Option<CupKind> {
         "/tea" => Some(CupKind::Tea),
         _ => None,
     }
+}
+
+const SHRUG: &str = "¯\\_(ツ)_/¯";
+
+/// Parse `/shrug` (case-insensitive, no arguments). Arguments fall through
+/// to the unknown-command handler, like `/coffee`.
+pub(crate) fn parse_shrug_command(input: &str) -> bool {
+    input.trim().eq_ignore_ascii_case("/shrug")
 }
 
 /// Build the multi-line ASCII body for `/coffee` or `/tea`. `variant`
